@@ -6,6 +6,10 @@
 
 load _helper
 
+seed_script_variables() {
+  grep -oE '\$\{[A-Z_]+' "${1}" | sed 's/^..//' | sort -u
+}
+
 @test "Seed scripts read the same variables" {
   assert_equal "$(seed_script_variables ./mariadb/seed.mariadb.sh)" "$(seed_script_variables ./mysql/seed.mysql.sh)"
 }
@@ -21,8 +25,4 @@ EOF
   assert_success
   assert_output "FIRST
 SECOND"
-}
-
-seed_script_variables() {
-  grep -oE '\$\{[A-Z_]+' "${1}" | sed 's/^..//' | sort -u
 }
