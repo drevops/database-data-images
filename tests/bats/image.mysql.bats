@@ -1,12 +1,12 @@
 #!/usr/bin/env bats
 #
-# tests/bats/node_modules/.bin/bats --tap tests/bats/image.bats
+# tests/bats/node_modules/.bin/bats --tap tests/bats/image.mysql.bats
 #
 # These tests run for the host platform by default. To run them for another
 # platform, set DOCKER_DEFAULT_PLATFORM to that platform; the Docker buildx
 # driver must support it.
 #
-# DOCKER_DEFAULT_PLATFORM=linux/arm64 tests/bats/node_modules/.bin/bats --tap tests/bats/image.bats
+# DOCKER_DEFAULT_PLATFORM=linux/arm64 tests/bats/node_modules/.bin/bats --tap tests/bats/image.mysql.bats
 #
 # The tests copy the source code at the last commit into the test directory,
 # so uncommitted changes are not tested.
@@ -24,7 +24,7 @@ load _helper
   step "Prepare base image."
 
   substep "Build base image ${base_image} and load into 'docker images'."
-  docker buildx build --platform "${BUILDX_PLATFORMS}" --load -t "${base_image}" -f "${TEST_DOCKERFILE}" "${TEST_ENGINE}"
+  docker buildx build --platform "${BUILDX_PLATFORMS}" --load -t "${base_image}" -f mysql/8.4.Dockerfile mysql
 
   substep "Start new detached container from the built base image."
   cid="$(docker run --user 1000 -d "${base_image}" 2>&3)"

@@ -190,7 +190,7 @@ The entrypoint then runs `mariadb-upgrade --force` before the server starts acce
 
 ### Running tests
 
-Tests run for the host platform and the MariaDB image by default. Set `TEST_ENGINE=mysql` to test the MySQL image.
+Tests run for the host platform by default.
 
 ```shell
 npm --prefix tests/bats ci
@@ -198,13 +198,12 @@ npm --prefix tests/bats ci
 # All tests.
 tests/bats/node_modules/.bin/bats tests/bats --tap
 
-# All tests for the MySQL image.
-TEST_ENGINE=mysql tests/bats/node_modules/.bin/bats tests/bats --tap
-
 # Individual test files.
-tests/bats/node_modules/.bin/bats tests/bats/image.bats --tap
-tests/bats/node_modules/.bin/bats tests/bats/image-mariadb.bats --tap
-tests/bats/node_modules/.bin/bats tests/bats/seed.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/image.mariadb.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/image.mysql.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed.mariadb.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed.mysql.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed-surface.bats --tap
 tests/bats/node_modules/.bin/bats tests/bats/helper.bats --tap
 ```
 

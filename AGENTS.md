@@ -70,22 +70,20 @@ tests/bats/node_modules/.bin/bats tests/bats
 Run specific BATS test file:
 
 ```bash
-tests/bats/node_modules/.bin/bats tests/bats/image.bats --tap
-tests/bats/node_modules/.bin/bats tests/bats/image-mariadb.bats --tap
-tests/bats/node_modules/.bin/bats tests/bats/seed.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/image.mariadb.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/image.mysql.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed.mariadb.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed.mysql.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed-surface.bats --tap
 tests/bats/node_modules/.bin/bats tests/bats/helper.bats --tap
-```
-
-Run tests for the MySQL image (the default is `mariadb`):
-
-```bash
-TEST_ENGINE=mysql tests/bats/node_modules/.bin/bats tests/bats
 ```
 
 BATS test conventions:
 
 - Tests in `tests/bats/` with `.bats` extension
-- `TEST_ENGINE` selects the engine; `TEST_DOCKER_REPOSITORY` selects the repository the seeding tests push to (default `drevops/db-data-test`)
+- Each engine has its own `image.<engine>.bats` and `seed.<engine>.bats`, so apply a shared change to both
+- `seed-surface.bats` requires both seed scripts to read the same variables, because the 2 engines share 1 public surface
+- `TEST_DOCKER_REPOSITORY` selects the repository the seeding tests push to (default `drevops/db-data-test`)
 - Helper functions in `tests/bats/_helper.bash`
 - Coverage exclusions: `# LCOV_EXCL_START` / `# LCOV_EXCL_STOP` (the region markers kcov recognizes)
 
@@ -148,7 +146,7 @@ BASE_IMAGE=drevops/db-data-mysql-8.4:canary ./mysql/seed.mysql.sh path/to/db.sql
 Tests run for the host platform by default. To force a specific platform, set `DOCKER_DEFAULT_PLATFORM` (the tests derive `BUILDX_PLATFORMS` from it); forcing a foreign platform requires emulation, under which MariaDB does not start reliably:
 
 ```bash
-DOCKER_DEFAULT_PLATFORM=linux/arm64 tests/bats/node_modules/.bin/bats tests/bats/image.bats
+DOCKER_DEFAULT_PLATFORM=linux/arm64 tests/bats/node_modules/.bin/bats tests/bats/image.mariadb.bats
 ```
 
 ## CI/CD
