@@ -1,0 +1,4 @@
+# The binary log holds a copy of every imported row, so it doubles the size of
+# the captured data.
+[mysqld]
+skip-log-bin

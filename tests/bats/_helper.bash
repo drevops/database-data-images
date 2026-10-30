@@ -27,7 +27,7 @@ setup() {
 
   # BUILD_DIR receives this repository at its last commit, so local changes
   # must be committed before the tests see them.
-  export BUILD_DIR="${BUILD_DIR:-"${BATS_TEST_TMPDIR//\/\//\/}/drevops-mariadb-drupal-data-$(date +%s)"}"
+  export BUILD_DIR="${BUILD_DIR:-"${BATS_TEST_TMPDIR//\/\//\/}/drevops-database-data-images-$(date +%s)"}"
   fixture_prepare_dir "${BUILD_DIR}"
 
   # Copy code at the last commit.
@@ -53,6 +53,17 @@ setup() {
   export TEST_DOCKER_TAG_PREFIX="bats-test-"
   TEST_DOCKER_TAG="${TEST_DOCKER_TAG_PREFIX}$(random_string_lower)"
   export TEST_DOCKER_TAG
+
+  # Seeding tests push to this repository, so it must accept the current login.
+  export TEST_DOCKER_REPOSITORY="${TEST_DOCKER_REPOSITORY:-drevops/db-data-test}"
+
+  export TEST_ENGINE="${TEST_ENGINE:-mariadb}"
+  export TEST_SEED_SCRIPT="./${TEST_ENGINE}/seed.${TEST_ENGINE}.sh"
+  case "${TEST_ENGINE}" in
+    mariadb) export TEST_DOCKERFILE="mariadb/10.11.Dockerfile" ;;
+    mysql) export TEST_DOCKERFILE="mysql/8.4.Dockerfile" ;;
+  esac
+  step "Testing the ${TEST_ENGINE} engine."
 
   # A test that must operate outside BUILD_DIR changes directory explicitly.
   pushd "${BUILD_DIR}" >/dev/null || exit 1
@@ -100,7 +111,8 @@ random_string_lower() {
 wait_mysql() {
   local cid="${1?Missing container ID}"
   substep "Wait for mysql to start in container ${cid}."
-  if ! docker exec --user 1000 -i "${cid}" sh -c "until nc -z localhost 3306; do sleep 1; echo -n .; done; echo" >&3; then
+  # The MySQL image has no 'nc', so the port check uses Bash's '/dev/tcp'.
+  if ! docker exec --user 1000 -i "${cid}" bash -c "until (exec 3<>/dev/tcp/localhost/3306) 2>/dev/null; do sleep 1; echo -n .; done; echo" >&3; then
     docker logs "${cid}"
     exit 1
   fi

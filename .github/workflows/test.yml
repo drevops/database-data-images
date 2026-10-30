@@ -20,19 +20,44 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Test, Arch amd64
+          - name: Test MariaDB, Arch amd64
+            engine: mariadb
+            dockerfile: mariadb/10.11.Dockerfile
             arch: amd64
             os: ubuntu-latest
             container: ''
-          - name: Test, Arch arm64
+          - name: Test MariaDB, Arch arm64
+            engine: mariadb
+            dockerfile: mariadb/10.11.Dockerfile
             arch: arm64
             os: ubuntu-24.04-arm
             container: ''
-          # The custom runner job validates the containerised CI environment
+          - name: Test MySQL, Arch amd64
+            engine: mysql
+            dockerfile: mysql/8.4.Dockerfile
+            arch: amd64
+            os: ubuntu-latest
+            container: ''
+          - name: Test MySQL, Arch arm64
+            engine: mysql
+            dockerfile: mysql/8.4.Dockerfile
+            arch: arm64
+            os: ubuntu-24.04-arm
+            container: ''
+          # The custom runner jobs validate the containerised CI environment
           # that consumer projects run the seeding in. Linting and coverage
-          # run only in this job because the ci-runner image bundles shfmt
+          # run only in these jobs because the ci-runner image bundles shfmt
           # and kcov.
-          - name: Test, Arch amd64, custom runner
+          - name: Test MariaDB, Arch amd64, custom runner
+            engine: mariadb
+            dockerfile: mariadb/10.11.Dockerfile
+            arch: amd64
+            os: ubuntu-latest
+            # https://hub.docker.com/r/drevops/ci-runner
+            container: drevops/ci-runner:26.10.0@sha256:36db4ee12da3372c86966fccd543e49c9470bca12e86eb5d4aad7904dd84a0dd
+          - name: Test MySQL, Arch amd64, custom runner
+            engine: mysql
+            dockerfile: mysql/8.4.Dockerfile
             arch: amd64
             os: ubuntu-latest
             # https://hub.docker.com/r/drevops/ci-runner
@@ -54,8 +79,8 @@ jobs:
       - name: Lint shell scripts
         if: matrix.container != ''
         run: |
-          shfmt -i 2 -ci -s -d seed.sh tests/bats/*.bash tests/bats/*.bats
-          shellcheck seed.sh tests/bats/*.bash tests/bats/*.bats
+          shfmt -i 2 -ci -s -d mariadb/seed.mariadb.sh mysql/seed.mysql.sh tests/bats/*.bash tests/bats/*.bats
+          shellcheck mariadb/seed.mariadb.sh mysql/seed.mysql.sh tests/bats/*.bash tests/bats/*.bats
         continue-on-error: ${{ vars.CI_LINT_IGNORE_FAILURE == '1' }}
 
       - name: Install Goss
@@ -70,14 +95,19 @@ jobs:
           GOSS_ARCH: ${{ matrix.arch }}
 
       - name: Build Docker image
-        run: docker build -t gosstestorg/gosstestimage:goss-test-tag .
+        run: docker build -t gosstestorg/gosstestimage:goss-test-tag -f "${DOCKERFILE}" "${ENGINE}"
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          ENGINE: ${{ matrix.engine }}
 
       - name: Run Goss tests
         run: |
           export GOSS_FILES_STRATEGY=cp
           export GOSS_PATH="${HOME}/bin/goss"
-          GOSS_FILES_PATH=tests/dgoss "${HOME}/bin/dgoss" run -i gosstestorg/gosstestimage:goss-test-tag
+          GOSS_FILES_PATH="tests/dgoss/${ENGINE}" "${HOME}/bin/dgoss" run -i gosstestorg/gosstestimage:goss-test-tag
         continue-on-error: ${{ vars.CI_TEST_IGNORE_FAILURE == '1' }}
+        env:
+          ENGINE: ${{ matrix.engine }}
 
       - name: Install BATS dependencies
         run: npm --prefix tests/bats ci
@@ -92,6 +122,7 @@ jobs:
         env:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}
           DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+          TEST_ENGINE: ${{ matrix.engine }}
 
       - name: Run BATS tests
         if: matrix.container == ''
@@ -103,12 +134,13 @@ jobs:
         env:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}
           DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+          TEST_ENGINE: ${{ matrix.engine }}
 
       - name: Upload coverage report as an artifact
         if: matrix.container != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: ${{ github.job }}-code-coverage-report
+          name: ${{ github.job }}-${{ matrix.engine }}-code-coverage-report
           include-hidden-files: true
           path: coverage
           if-no-files-found: error
@@ -124,11 +156,28 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   push-canary-to-registry:
+    name: Push canary, ${{ matrix.engine }}
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     needs:
       - test
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The old image name stays an identical copy of the MariaDB image
+          # until 1 March 2027.
+          - engine: mariadb
+            dockerfile: mariadb/10.11.Dockerfile
+            images: |
+              drevops/db-data-mariadb-10.11
+              drevops/mariadb-drupal-data
+          - engine: mysql
+            dockerfile: mysql/8.4.Dockerfile
+            images: |
+              drevops/db-data-mysql-8.4
 
     steps:
       - name: Checkout code
@@ -152,13 +201,15 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
-          images: ${{ vars.DOCKER_IMAGE || 'drevops/mariadb-drupal-data' }}
+          images: ${{ matrix.images }}
+          tags: type=raw,value=canary
 
       - name: Build and push Docker image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
-          context: .
+          context: ${{ matrix.engine }}
+          file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ vars.DOCKER_IMAGE || 'drevops/mariadb-drupal-data' }}:canary
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64

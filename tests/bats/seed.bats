@@ -17,8 +17,8 @@ load _helper
 
 @test "Seeding of the data works" {
   tag="${TEST_DOCKER_TAG}"
-  export BASE_IMAGE="drevops/mariadb-drupal-data-test:${tag}-base"
-  destination_image="drevops/mariadb-drupal-data-test:${tag}-destination"
+  export BASE_IMAGE="${TEST_DOCKER_REPOSITORY}:${tag}-base"
+  destination_image="${TEST_DOCKER_REPOSITORY}:${tag}-destination"
 
   step "Prepare base image."
 
@@ -27,7 +27,7 @@ load _helper
   cp "${BATS_TEST_DIRNAME}/fixtures/db.sql" "${file}"
 
   substep "Build and push a fresh base image tagged with ${BASE_IMAGE}."
-  docker buildx build --platform "${BUILDX_PLATFORMS}" --load --push --no-cache -t "${BASE_IMAGE}" .
+  docker buildx build --platform "${BUILDX_PLATFORMS}" --load --push --no-cache -t "${BASE_IMAGE}" -f "${TEST_DOCKERFILE}" "${TEST_ENGINE}"
 
   step "Assert seeding without mysql upgrade works."
 
@@ -36,7 +36,7 @@ load _helper
   # separate from the seeding process.
   export DESTINATION_PLATFORMS="${BUILDX_PLATFORMS}"
   substep "Run database seeding script for ${destination_image} from the base image ${BASE_IMAGE} for destination platform(s) ${DESTINATION_PLATFORMS}."
-  ./seed.sh "${file}" "${destination_image}" >&3
+  "${TEST_SEED_SCRIPT}" "${file}" "${destination_image}" >&3
 
   substep "Start container from the seeded image ${destination_image}."
   # The container runs as a non-root user to imitate limited host permissions.
@@ -58,34 +58,43 @@ load _helper
   run docker run --rm --entrypoint grep "${destination_image}" -rl "admin@example.com" /home/db-data
   assert_success
 
+  if [ "${TEST_ENGINE}" = "mariadb" ]; then
+    assert_mariadb_upgrade_on_request "${cid}" "${destination_image}"
+  fi
+}
+
+# Asserts that the running container skipped the upgrade, and that another
+# container from the same seeded image performs it on request.
+assert_mariadb_upgrade_on_request() {
   substep "Assert that the mysql upgrade was skipped by default."
-  run docker logs "${cid}"
+  run docker logs "${1}"
   assert_success
   assert_output_not_contains "starting mysql upgrade"
 
   step "Assert mysql upgrade works in container started from already seeded image."
 
-  substep "Start container from the seeded image ${destination_image} and request an upgrade."
+  substep "Start container from the seeded image ${2} and request an upgrade."
   # The container runs as a non-root user to imitate limited host permissions.
-  cid="$(docker run --user 1000 -d -e MARIADB_FORCE_UPGRADE=1 "${destination_image}" 2>&3)"
+  local upgraded_cid
+  upgraded_cid="$(docker run --user 1000 -d -e MARIADB_FORCE_UPGRADE=1 "${2}" 2>&3)"
 
-  wait_mysql "${cid}"
+  wait_mysql "${upgraded_cid}"
 
   substep "Assert that the mysql upgrade was performed."
-  run docker logs "${cid}"
+  run docker logs "${upgraded_cid}"
   assert_success
   assert_output_contains "starting mysql upgrade"
 
   substep "Assert that data is present in the new image after the upgrade."
-  run docker exec --user 1000 "${cid}" /usr/bin/mysql -e "USE drupal; SHOW TABLES;" drupal
+  run docker exec --user 1000 "${upgraded_cid}" /usr/bin/mysql -e "USE drupal; SHOW TABLES;" drupal
   assert_success
   assert_output_contains "users"
 }
 
 @test "Seeding of the data works with .dockerignore" {
   tag="${TEST_DOCKER_TAG}"
-  export BASE_IMAGE="drevops/mariadb-drupal-data-test:${tag}-base"
-  destination_image="drevops/mariadb-drupal-data-test:${tag}-destination"
+  export BASE_IMAGE="${TEST_DOCKER_REPOSITORY}:${tag}-base"
+  destination_image="${TEST_DOCKER_REPOSITORY}:${tag}-destination"
 
   step "Prepare .dockerignore file."
   echo ".db-structure" >.dockerignore
@@ -98,7 +107,7 @@ load _helper
   cp "${BATS_TEST_DIRNAME}/fixtures/db.sql" "${file}"
 
   substep "Build and push a fresh base image tagged with ${BASE_IMAGE}."
-  docker buildx build --platform "${BUILDX_PLATFORMS}" --load --push --no-cache -t "${BASE_IMAGE}" .
+  docker buildx build --platform "${BUILDX_PLATFORMS}" --load --push --no-cache -t "${BASE_IMAGE}" -f "${TEST_DOCKERFILE}" "${TEST_ENGINE}"
 
   step "Assert seeding without mysql upgrade works."
 
@@ -107,7 +116,7 @@ load _helper
   # separate from the seeding process.
   export DESTINATION_PLATFORMS="${BUILDX_PLATFORMS}"
   substep "Run database seeding script for ${destination_image} from the base image ${BASE_IMAGE} for destination platform(s) ${DESTINATION_PLATFORMS}."
-  ./seed.sh "${file}" "${destination_image}" >&3
+  "${TEST_SEED_SCRIPT}" "${file}" "${destination_image}" >&3
   assert_file_not_exists .dockerignore.bak
 
   substep "Start container from the seeded image ${destination_image}."
@@ -121,34 +130,15 @@ load _helper
   assert_success
   assert_output_contains "users"
 
-  substep "Assert that the mysql upgrade was skipped by default."
-  run docker logs "${cid}"
-  assert_success
-  assert_output_not_contains "starting mysql upgrade"
-
-  step "Assert mysql upgrade works in container started from already seeded image."
-
-  substep "Start container from the seeded image ${destination_image} and request an upgrade."
-  # The container runs as a non-root user to imitate limited host permissions.
-  cid="$(docker run --user 1000 -d -e MARIADB_FORCE_UPGRADE=1 "${destination_image}" 2>&3)"
-
-  wait_mysql "${cid}"
-
-  substep "Assert that the mysql upgrade was performed."
-  run docker logs "${cid}"
-  assert_success
-  assert_output_contains "starting mysql upgrade"
-
-  substep "Assert that data is present in the new image after the upgrade."
-  run docker exec --user 1000 "${cid}" /usr/bin/mysql -e "USE drupal; SHOW TABLES;" drupal
-  assert_success
-  assert_output_contains "users"
+  if [ "${TEST_ENGINE}" = "mariadb" ]; then
+    assert_mariadb_upgrade_on_request "${cid}" "${destination_image}"
+  fi
 }
 
 @test "Seeding sanitizes the data when SANITIZE_PROCEED is 1" {
   tag="${TEST_DOCKER_TAG}"
-  export BASE_IMAGE="drevops/mariadb-drupal-data-test:${tag}-base"
-  destination_image="drevops/mariadb-drupal-data-test:${tag}-destination"
+  export BASE_IMAGE="${TEST_DOCKER_REPOSITORY}:${tag}-base"
+  destination_image="${TEST_DOCKER_REPOSITORY}:${tag}-destination"
 
   step "Prepare base image."
 
@@ -159,7 +149,7 @@ load _helper
   cp "${BATS_TEST_DIRNAME}/fixtures/sanitize.sql" scripts/sanitize.sql
 
   substep "Build and push a fresh base image tagged with ${BASE_IMAGE}."
-  docker buildx build --platform "${BUILDX_PLATFORMS}" --load --push --no-cache -t "${BASE_IMAGE}" .
+  docker buildx build --platform "${BUILDX_PLATFORMS}" --load --push --no-cache -t "${BASE_IMAGE}" -f "${TEST_DOCKERFILE}" "${TEST_ENGINE}"
 
   export DESTINATION_PLATFORMS="${BUILDX_PLATFORMS}"
   export SANITIZE_PROCEED=1
@@ -167,7 +157,7 @@ load _helper
   step "Assert seeding stops before building the image when a sanitization query fails."
 
   echo "UPDATE missing_table SET mail = NULL;" >"${BUILD_DIR}/broken.sql"
-  run env SANITIZE_FILE="${BUILD_DIR}/broken.sql" ./seed.sh "${file}" "${destination_image}"
+  run env SANITIZE_FILE="${BUILD_DIR}/broken.sql" "${TEST_SEED_SCRIPT}" "${file}" "${destination_image}"
   assert_failure
   assert_output_contains "Unable to sanitize database with queries from the ${BUILD_DIR}/broken.sql file."
   assert_output_not_contains "Stage 2: Build image"
@@ -181,7 +171,7 @@ load _helper
 
   cp "${file}" "${BUILD_DIR}/db-accounts.sql"
   echo "CREATE USER 'extra'@'%' IDENTIFIED BY 'extra';" >>"${BUILD_DIR}/db-accounts.sql"
-  run ./seed.sh "${BUILD_DIR}/db-accounts.sql" "${destination_image}"
+  run "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db-accounts.sql" "${destination_image}"
   assert_failure
   assert_output_contains "The database dump or the sanitization queries change accounts, grants or other tables in the 'mysql' system database, which the sanitized export does not carry into the image; remove those statements."
   assert_output_not_contains "Stage 2: Build image"
@@ -190,7 +180,7 @@ load _helper
 
   cp "${file}" "${BUILD_DIR}/db-time-zones.sql"
   echo "INSERT INTO mysql.time_zone (Use_leap_seconds) VALUES ('N');" >>"${BUILD_DIR}/db-time-zones.sql"
-  run ./seed.sh "${BUILD_DIR}/db-time-zones.sql" "${destination_image}"
+  run "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db-time-zones.sql" "${destination_image}"
   assert_failure
   assert_output_contains "The database dump or the sanitization queries change accounts, grants or other tables in the 'mysql' system database, which the sanitized export does not carry into the image; remove those statements."
   assert_output_not_contains "Stage 2: Build image"
@@ -198,7 +188,7 @@ load _helper
   step "Assert seeding stops before building the image when the sanitization queries grant a database privilege."
 
   echo "GRANT SELECT ON drupal.* TO 'root'@'localhost';" >"${BUILD_DIR}/grant.sql"
-  run env SANITIZE_FILE="${BUILD_DIR}/grant.sql" ./seed.sh "${file}" "${destination_image}"
+  run env SANITIZE_FILE="${BUILD_DIR}/grant.sql" "${TEST_SEED_SCRIPT}" "${file}" "${destination_image}"
   assert_failure
   assert_output_contains "Sanitized database with queries from the ${BUILD_DIR}/grant.sql file."
   assert_output_contains "The database dump or the sanitization queries change accounts, grants or other tables in the 'mysql' system database, which the sanitized export does not carry into the image; remove those statements."
@@ -206,7 +196,7 @@ load _helper
 
   step "Assert seeding with sanitization works."
 
-  run ./seed.sh "${file}" "${destination_image}"
+  run "${TEST_SEED_SCRIPT}" "${file}" "${destination_image}"
   assert_success
   assert_output_contains "Sanitization: enabled; the queries from ./scripts/sanitize.sql run before the database is captured."
   assert_output_contains "Sanitized database with queries from the ./scripts/sanitize.sql file."
@@ -250,7 +240,7 @@ load _helper
   cp "${BATS_TEST_DIRNAME}/fixtures/db.sql" "${BUILD_DIR}/db.sql"
   echo ".db-structure" >.dockerignore
 
-  run ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage"
+  run "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
   assert_failure
   assert_output_contains "No logs available to display."
   assert_output_contains "Restored .dockerignore from .dockerignore.bak"
@@ -293,7 +283,7 @@ seed_with_destination() {
     args+=("${3}")
   fi
 
-  DESTINATION_IMAGE="${1}" DST_IMAGE="${2}" ./seed.sh "${args[@]}"
+  DESTINATION_IMAGE="${1}" DST_IMAGE="${2}" "${TEST_SEED_SCRIPT}" "${args[@]}"
 }
 
 @test "Destination image is tagged and reported for its registry" {
@@ -336,7 +326,7 @@ EOF
 # destination image it reports and the last line of its output.
 seed_to_destination() {
   local seed_output
-  seed_output="$(./seed.sh "${BUILD_DIR}/db.sql" "${1}" 2>&1)"
+  seed_output="$("${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "${1}" 2>&1)"
 
   local destination
   destination="$(echo "${seed_output}" | sed -n 's/^ *Destination image: //p')"
@@ -388,7 +378,7 @@ seed_to_destination() {
 }
 
 seed_with_sanitization() {
-  SANITIZE_PROCEED="${1}" SANITIZE_FILE="${2}" TMP_SANITIZED_DB_FILE="${3}" ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage"
+  SANITIZE_PROCEED="${1}" SANITIZE_FILE="${2}" TMP_SANITIZED_DB_FILE="${3}" "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
 }
 
 @test "Seeding removes the sanitized export and the running container when it fails" {
@@ -409,7 +399,7 @@ EOF
   # shellcheck disable=SC2034
   TEST_CASES=(
     "mysqldump" "failure=export export=absent mode=owner-only container=removed"
-    "until nc" "failure=service export=absent mode=owner-only container=removed"
+    "until " "failure=service export=absent mode=owner-only container=removed"
   )
   dataprovider_run "seed_failing_at" 2
 }
@@ -420,7 +410,7 @@ seed_failing_at() {
   rm -f export-mode.txt
 
   local seed_output
-  seed_output="$(SANITIZE_PROCEED=1 SANITIZE_FILE="${BUILD_DIR}/sanitize.sql" TEST_FAILING_CALL="${1}" ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage" 2>&1)"
+  seed_output="$(SANITIZE_PROCEED=1 SANITIZE_FILE="${BUILD_DIR}/sanitize.sql" TEST_FAILING_CALL="${1}" "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage" 2>&1)"
 
   local failure="none"
   if [[ ${seed_output} == *"Unable to export sanitized database to the .db-sanitized.sql file."* ]]; then
@@ -468,7 +458,7 @@ seed_failing_at() {
 
 seed_on_machine() {
   mock_set_output "${mock_uname}" "${1}"
-  ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage"
+  "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
 }
 
 @test "Seeding stops when the database checks in a container fail" {
@@ -489,7 +479,7 @@ seed_on_machine() {
 
 seed_with_docker_output() {
   mock_set_output "${mock_docker}" "${1}"
-  ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage"
+  "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
 }
 
 @test "Seeding stops when .dockerignore cannot be moved or restored" {
@@ -503,7 +493,7 @@ seed_with_docker_output() {
   step "Assert that seeding stops when .dockerignore is not moved."
   # The 'mv' mock succeeds without moving anything.
   mock_command "mv" >/dev/null
-  run ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage"
+  run "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
   assert_failure
   assert_output_contains "Unable to move .dockerignore to .dockerignore.bak"
   assert_file_exists .dockerignore
@@ -514,7 +504,7 @@ seed_with_docker_output() {
   mock_set_side_effect "${mock_mv}" - 1 <<'EOF'
 command -p mv "$@"
 EOF
-  run ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage"
+  run "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
   assert_failure
   assert_output_contains "Unable to restore .dockerignore from .dockerignore.bak"
   assert_file_exists .dockerignore.bak
@@ -535,7 +525,7 @@ EOF
 
   # The 'docker cp' mock copies nothing, so seeding stops in Stage 1 after the
   # container logs were collected.
-  run env LOG_IS_VERBOSE=1 ./seed.sh "${BUILD_DIR}/db.sql" "myorg/myimage"
+  run env LOG_IS_VERBOSE=1 "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
   assert_failure
   assert_output_contains "Unable to copy expanded database files to host"
   assert_output_contains "Fake container log line."

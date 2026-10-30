@@ -10,10 +10,23 @@ permissions:
 
 jobs:
   push-release-to-registry:
+    name: Push release, ${{ matrix.engine }}
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
+    strategy:
+      matrix:
+        include:
+          # The old image name stays an identical copy of the MariaDB image
+          # until 1 March 2027.
+          - engine: mariadb
+            dockerfile: mariadb/10.11.Dockerfile
+            images: |
+              drevops/db-data-mariadb-10.11
+              drevops/mariadb-drupal-data
+          - engine: mysql
+            dockerfile: mysql/8.4.Dockerfile
+            images: |
+              drevops/db-data-mysql-8.4
 
     steps:
       - name: Checkout code
@@ -37,19 +50,43 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
-          images: ${{ vars.DOCKER_IMAGE || 'drevops/mariadb-drupal-data' }}
+          images: ${{ matrix.images }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
-          context: .
+          context: ${{ matrix.engine }}
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
 
-      - name: Upload seed.sh to release
+  upload-seed-scripts:
+    runs-on: ubuntu-latest
+
+    needs:
+      - push-release-to-registry
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # The 'seed.sh' asset keeps the old download URL working until
+      # 1 March 2027.
+      - name: Copy the MariaDB seed script to the old asset name
+        run: cp mariadb/seed.mariadb.sh seed.sh
+
+      - name: Upload seed scripts to release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
-          files: seed.sh
+          files: |
+            mariadb/seed.mariadb.sh
+            mysql/seed.mysql.sh
+            seed.sh
           overwrite: true
