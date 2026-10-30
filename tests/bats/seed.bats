@@ -61,6 +61,16 @@ load _helper
   if [ "${TEST_ENGINE}" = "mariadb" ]; then
     assert_mariadb_upgrade_on_request "${cid}" "${destination_image}"
   fi
+
+  if [ "${TEST_ENGINE}" = "mysql" ]; then
+    substep "Assert that binary logging is off and that no binary log was captured."
+    run docker exec --user 1000 "${cid}" /usr/bin/mysql --skip-column-names -e "SELECT @@log_bin;"
+    assert_success
+    assert_output "0"
+    run docker exec --user 1000 "${cid}" find /home/db-data -maxdepth 1 -name "binlog.*"
+    assert_success
+    assert_output ""
+  fi
 }
 
 # Asserts that the running container skipped the upgrade, and that another
@@ -480,6 +490,21 @@ seed_on_machine() {
 seed_with_docker_output() {
   mock_set_output "${mock_docker}" "${1}"
   "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
+}
+
+@test "Seeding stops when a system table checksum is NULL" {
+  [ "${TEST_ENGINE}" = "mysql" ] || skip "MySQL only."
+
+  mock_docker="$(mock_command "docker")"
+  mock_set_output "${mock_docker}" "user_variables users mysql.user NULL"
+
+  cp "${BATS_TEST_DIRNAME}/fixtures/db.sql" "${BUILD_DIR}/db.sql"
+  cp "${BATS_TEST_DIRNAME}/fixtures/sanitize.sql" "${BUILD_DIR}/sanitize.sql"
+
+  run env SANITIZE_PROCEED=1 SANITIZE_FILE="${BUILD_DIR}/sanitize.sql" "${TEST_SEED_SCRIPT}" "${BUILD_DIR}/db.sql" "myorg/myimage"
+  assert_failure
+  assert_output_contains "Unable to read the checksums of the tables in the 'mysql' system database."
+  assert_output_not_contains "Stage 2: Build image"
 }
 
 @test "Seeding stops when .dockerignore cannot be moved or restored" {
