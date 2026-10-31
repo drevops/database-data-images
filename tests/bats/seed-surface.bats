@@ -7,7 +7,7 @@
 load _helper
 
 seed_script_variables() {
-  grep -oE '\$\{[A-Z_]+' "${1}" | sed 's/^..//' | sort -u
+  grep -oE '\$\{[A-Z_][A-Z0-9_]*' "${1}" | sed 's/^..//' | sort -u
 }
 
 @test "Seed scripts read the same variables" {
@@ -18,11 +18,13 @@ seed_script_variables() {
   cat >"${BUILD_DIR}/script.sh" <<'EOF'
 SECOND="${SECOND:-${FIRST:-${1-}}}"
 [ -n "${FIRST:-}" ]
+[ -n "${FIRST2:-}" ]
 lowercase="${lowercase_value}"
 EOF
 
   run seed_script_variables "${BUILD_DIR}/script.sh"
   assert_success
   assert_output "FIRST
+FIRST2
 SECOND"
 }
