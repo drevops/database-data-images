@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ##
 # Seed image with a database from a file.
-# @see https://github.com/drevops/mariadb-drupal-data/blob/main/seed.sh
+# @see https://github.com/drevops/database-data-images/blob/main/mariadb/seed.mariadb.sh
 #
 # The seeding process has 3 stages:
 # 1. Create extracted DB files by starting a temporary container and
@@ -13,19 +13,19 @@
 #    imported.
 #
 # Usage:
-# ./seed.sh path/to/db.sql myorg/myimage:latest
+# ./seed.mariadb.sh path/to/db.sql myorg/myimage:latest
 #
-# ./seed.sh path/to/db.sql ghcr.io/myorg/myimage:latest
+# ./seed.mariadb.sh path/to/db.sql ghcr.io/myorg/myimage:latest
 #
-# DESTINATION_IMAGE=myorg/myimage:latest ./seed.sh path/to/db.sql
+# DESTINATION_IMAGE=myorg/myimage:latest ./seed.mariadb.sh path/to/db.sql
 #
-# SANITIZE_PROCEED=1 ./seed.sh path/to/db.sql myorg/myimage:latest
+# SANITIZE_PROCEED=1 ./seed.mariadb.sh path/to/db.sql myorg/myimage:latest
 #
-# SANITIZE_PROCEED=1 SANITIZE_FILE=path/to/sanitize.sql ./seed.sh path/to/db.sql myorg/myimage:latest
+# SANITIZE_PROCEED=1 SANITIZE_FILE=path/to/sanitize.sql ./seed.mariadb.sh path/to/db.sql myorg/myimage:latest
 #
-# DESTINATION_PLATFORMS=linux/amd64,linux/arm64 ./seed.sh path/to/db.sql myorg/myimage:latest
+# DESTINATION_PLATFORMS=linux/amd64,linux/arm64 ./seed.mariadb.sh path/to/db.sql myorg/myimage:latest
 #
-# DOCKER_DEFAULT_PLATFORM=linux/amd64 ./seed.sh path/to/db.sql myorg/myimage:latest
+# DOCKER_DEFAULT_PLATFORM=linux/amd64 ./seed.mariadb.sh path/to/db.sql myorg/myimage:latest
 #
 # shellcheck disable=SC2002,SC2015
 
@@ -45,10 +45,10 @@ SANITIZE_FILE="${SANITIZE_FILE:-./scripts/sanitize.sql}"
 
 # Exporting the databases needs a known data directory path, so Stage 1 uses
 # this same base image.
-BASE_IMAGE="${BASE_IMAGE:-drevops/mariadb-drupal-data:latest}"
+BASE_IMAGE="${BASE_IMAGE:-drevops/db-data-mariadb-10.11:latest}"
 
 # Some shells report the platform incorrectly; in such cases, run as
-# `DOCKER_DEFAULT_PLATFORM=linux/amd64 ./seed.sh path/to/db.sql myorg/myimage:latest`
+# `DOCKER_DEFAULT_PLATFORM=linux/amd64 ./seed.mariadb.sh path/to/db.sql myorg/myimage:latest`
 DOCKER_DEFAULT_PLATFORM="${DOCKER_DEFAULT_PLATFORM:-}"
 
 case "$(uname -m)" in

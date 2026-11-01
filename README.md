@@ -1,21 +1,22 @@
 <p align="center">
   <a href="" rel="noopener">
-  <img width=200px height=200px src="https://placehold.jp/000000/ffffff/200x200.png?text=MariaDB+Drupal+Data&css=%7B%22border-radius%22%3A%22%20100px%22%7D" alt="Mariadb Drupal data logo"></a>
+  <img width=200px height=200px src="https://placehold.jp/000000/ffffff/200x200.png?text=Database+Data+Images&css=%7B%22border-radius%22%3A%22%20100px%22%7D" alt="Database data images logo"></a>
 </p>
 
-<h1 align="center">MariaDB data container for Drupal with database captured as Docker layers.</h1>
+<h1 align="center">Database images for Drupal with the database captured as Docker layers.</h1>
 
 <div align="center">
 
-[![GitHub Issues](https://img.shields.io/github/issues/drevops/mariadb-drupal-data.svg)](https://github.com/drevops/mariadb-drupal-data/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/drevops/mariadb-drupal-data.svg)](https://github.com/drevops/mariadb-drupal-data/pulls)
-[![Test](https://github.com/drevops/mariadb-drupal-data/actions/workflows/test.yml/badge.svg)](https://github.com/drevops/mariadb-drupal-data/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/drevops/mariadb-drupal-data/graph/badge.svg?token=JYSIXUF6QX)](https://codecov.io/gh/drevops/mariadb-drupal-data)
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/drevops/mariadb-drupal-data)
-![LICENSE](https://img.shields.io/github/license/drevops/mariadb-drupal-data)
+[![GitHub Issues](https://img.shields.io/github/issues/drevops/database-data-images.svg)](https://github.com/drevops/database-data-images/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/drevops/database-data-images.svg)](https://github.com/drevops/database-data-images/pulls)
+[![Test](https://github.com/drevops/database-data-images/actions/workflows/test.yml/badge.svg)](https://github.com/drevops/database-data-images/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/drevops/database-data-images/graph/badge.svg?token=JYSIXUF6QX)](https://codecov.io/gh/drevops/database-data-images)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/drevops/database-data-images)
+![LICENSE](https://img.shields.io/github/license/drevops/database-data-images)
 ![Renovate](https://img.shields.io/badge/renovate-enabled-green?logo=renovatebot)
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/drevops/mariadb-drupal-data?logo=docker)](https://hub.docker.com/r/drevops/mariadb-drupal-data)
+[![MariaDB Docker Pulls](https://img.shields.io/docker/pulls/drevops/db-data-mariadb-10.11?logo=docker&label=mariadb%20pulls)](https://hub.docker.com/r/drevops/db-data-mariadb-10.11)
+[![MySQL Docker Pulls](https://img.shields.io/docker/pulls/drevops/db-data-mysql-8.4?logo=docker&label=mysql%20pulls)](https://hub.docker.com/r/drevops/db-data-mysql-8.4)
 ![amd64](https://img.shields.io/badge/arch-linux%2Famd64-brightgreen)
 ![arm64](https://img.shields.io/badge/arch-linux%2Farm64-brightgreen)
 
@@ -24,18 +25,53 @@
 
 ## How it works
 
-Usually, MariaDB uses data directory specified as a Docker volume that is
-mounted onto host: this allows retaining data after container restarts.
+Usually, a database server uses a data directory specified as a Docker volume
+that is mounted onto host: this allows retaining data after container restarts.
 
-The MariaDB image in this project uses custom location `/home/db-data` (not
-a Docker volume) to store expanded database files. These files then can be
-captured as a Docker layer and stored as an image to docker registry.
+The images in this project use custom location `/home/db-data` (not a Docker
+volume) to store expanded database files. These files then can be captured as a
+Docker layer and stored as an image to docker registry.
 
 Image consumers download the image and start containers with instantaneously
 available data (no time-consuming database imports required).
 
-Technically, the majority of the functionality is relying on upstream [`uselagoon/mariadb-10.11-drupal`](https://github.com/uselagoon/lagoon-images/blob/main/images/mariadb-drupal/10.11.Dockerfile) Docker image.
-[Entrypoint script](entrypoint.bash) had to be copied from [upstream script](https://github.com/uselagoon/lagoon-images/blob/main/images/mariadb/entrypoints/9999-mariadb-init.10.bash) and adjusted to support custom data directory.
+Technically, the majority of the functionality relies on the upstream Lagoon images:
+
+- The MariaDB image extends [`uselagoon/mariadb-10.11-drupal`](https://github.com/uselagoon/lagoon-images/blob/main/images/mariadb-drupal/10.11.Dockerfile). Its [entrypoint script](mariadb/entrypoint.bash) is copied from the [upstream script](https://github.com/uselagoon/lagoon-images/blob/main/images/mariadb/entrypoints/9999-mariadb-init.10.bash) and adjusted to support the custom data directory.
+- The MySQL image extends [`uselagoon/mysql-8.4`](https://github.com/uselagoon/lagoon-images/blob/main/images/mysql/8.4.Dockerfile) and uses its entrypoint script as is. The image sets the `drupal` database, user and password. It also [turns off binary logging](mysql/disable-binlog.cnf) to keep the captured data small.
+
+## Supported images
+
+Pick the image that matches the database engine your project runs:
+
+| Engine | Version | Image | Seed script | Architectures |
+|---|---|---|---|---|
+| MariaDB | 10.11 | `drevops/db-data-mariadb-10.11` | `seed.mariadb.sh` | `linux/amd64`, `linux/arm64` |
+| MySQL | 8.4 | `drevops/db-data-mysql-8.4` | `seed.mysql.sh` | `linux/amd64`, `linux/arm64` |
+
+We release every month. Each release updates both images under the same version tag, and `latest` points to the newest release. To update, change the tag you use or seed your image again from the newest base image.
+
+## Move from `drevops/mariadb-drupal-data`
+
+The `drevops/mariadb-drupal-data` image is an exact copy of `drevops/db-data-mariadb-10.11`, and the `seed.sh` release asset is an exact copy of `seed.mariadb.sh`. We publish both copies until 1 March 2027. After that date, the old image's existing tags still pull, but its `latest` and `canary` tags stop updating. The `releases/latest/download/seed.sh` URL then returns a 404.
+
+To stay on MariaDB, replace the old names:
+
+| Old name | New name |
+|---|---|
+| `drevops/mariadb-drupal-data` | `drevops/db-data-mariadb-10.11` |
+| `releases/latest/download/seed.sh` | `releases/latest/download/seed.mariadb.sh` |
+| `./seed.sh` | `./seed.mariadb.sh` |
+
+Your existing data keeps working, because the new image is the same image.
+
+To move to MySQL, seed a new image from a database dump, because MySQL can't open a MariaDB data directory:
+
+```shell
+curl -LO https://github.com/drevops/database-data-images/releases/latest/download/seed.mysql.sh
+chmod +x seed.mysql.sh
+./seed.mysql.sh path/to/db.sql myorg/myimage:latest
+```
 
 ## Use case
 
@@ -54,34 +90,36 @@ imports.
 
 ## Seeding image with your database
 
-1. Download the `seed.sh` script from this repository:
+The examples use `seed.mysql.sh`. For the MariaDB image, use `seed.mariadb.sh` instead.
+
+1. Download the seed script for your engine from this repository:
 
 ```shell
-curl -LO https://github.com/drevops/mariadb-drupal-data/releases/latest/download/seed.sh
-chmod +x seed.sh
+curl -LO https://github.com/drevops/database-data-images/releases/latest/download/seed.mysql.sh
+chmod +x seed.mysql.sh
 ```
 2. Run the script with the path to your database dump and the image name:
 
 ```shell
-./seed.sh path/to/db.sql myorg/myimage:latest
+./seed.mysql.sh path/to/db.sql myorg/myimage:latest
 
 # with the destination image from the environment
-DESTINATION_IMAGE=myorg/myimage:latest ./seed.sh path/to/db.sql
+DESTINATION_IMAGE=myorg/myimage:latest ./seed.mysql.sh path/to/db.sql
 
 # to a registry other than Docker Hub
-./seed.sh path/to/db.sql ghcr.io/myorg/myimage:latest
+./seed.mysql.sh path/to/db.sql ghcr.io/myorg/myimage:latest
 
 # with database sanitization using the queries from ./scripts/sanitize.sql
-SANITIZE_PROCEED=1 ./seed.sh path/to/db.sql myorg/myimage:latest
+SANITIZE_PROCEED=1 ./seed.mysql.sh path/to/db.sql myorg/myimage:latest
 
 # with forced source platform
-DOCKER_DEFAULT_PLATFORM=linux/amd64 ./seed.sh path/to/db.sql myorg/myimage:latest
+DOCKER_DEFAULT_PLATFORM=linux/amd64 ./seed.mysql.sh path/to/db.sql myorg/myimage:latest
 
 # for multi-platform image
-DESTINATION_PLATFORMS=linux/amd64,linux/arm64 ./seed.sh path/to/db.sql myorg/myimage:latest
+DESTINATION_PLATFORMS=linux/amd64,linux/arm64 ./seed.mysql.sh path/to/db.sql myorg/myimage:latest
 
 # with a custom base image (e.g., canary)
-BASE_IMAGE=drevops/mariadb-drupal-data:canary ./seed.sh path/to/db.sql myorg/myimage:latest
+BASE_IMAGE=drevops/db-data-mysql-8.4:canary ./seed.mysql.sh path/to/db.sql myorg/myimage:latest
 ```
 
 By default, the script builds an image for the host platform (`linux/amd64` on Intel hosts, `linux/arm64` on Apple Silicon), so importing, building, and the final test stage all run natively on the machine that invokes it. Multi-platform builds are opt-in via `DESTINATION_PLATFORMS` and require a Docker buildx builder that supports them (Docker Desktop with the containerd image store, or a `docker-container` builder).
@@ -90,18 +128,18 @@ You can also set the destination image in `DESTINATION_IMAGE`, which takes prece
 
 The destination image can be on any registry, like `ghcr.io/myorg/myimage:latest` or a local `localhost:5000/myorg/myimage:latest`. A destination without a tag gets `latest`. When seeding finishes, the script prints a link to the image's tags on Docker Hub, or the image reference for any other registry.
 
-Note that you should already be logged in to the registry as `seed.sh` will be pushing an image as a part of `docker buildx` process.
+Note that you should already be logged in to the registry as the seed script will be pushing an image as a part of `docker buildx` process.
 
 ## Sanitizing the database
 
-Set `SANITIZE_PROCEED=1`, and `seed.sh` runs the SQL queries from `SANITIZE_FILE` against the imported database before it captures the database into the image. It's the place to replace personal data and to empty the tables developers don't need, like logs, sessions and caches:
+Set `SANITIZE_PROCEED=1`, and the seed script runs the SQL queries from `SANITIZE_FILE` against the imported database before it captures the database into the image. It's the place to replace personal data and to empty the tables developers don't need, like logs, sessions and caches:
 
 ```shell
 # with the queries from ./scripts/sanitize.sql
-SANITIZE_PROCEED=1 ./seed.sh path/to/db.sql myorg/myimage:latest
+SANITIZE_PROCEED=1 ./seed.mysql.sh path/to/db.sql myorg/myimage:latest
 
 # with the queries from another file
-SANITIZE_PROCEED=1 SANITIZE_FILE=path/to/sanitize.sql ./seed.sh path/to/db.sql myorg/myimage:latest
+SANITIZE_PROCEED=1 SANITIZE_FILE=path/to/sanitize.sql ./seed.mysql.sh path/to/db.sql myorg/myimage:latest
 ```
 
 Sanitization is opt-in. `SANITIZE_PROCEED` is `0` by default, and only the value `1` turns it on: `true` or `yes` leave it off. While it's off, the image holds the database exactly as it was in the dump, and `SANITIZE_FILE` on its own changes nothing. The script prints which of the 2 it's doing before any work starts, so the CI log always shows what kind of image it pushed:
@@ -110,11 +148,11 @@ Sanitization is opt-in. `SANITIZE_PROCEED` is `0` by default, and only the value
 Sanitization: enabled; the queries from ./scripts/sanitize.sql run before the database is captured.
 ```
 
-`SANITIZE_FILE` defaults to `./scripts/sanitize.sql`, relative to the directory you run `seed.sh` from, which is where Vortex projects keep their sanitization queries. If the file doesn't exist, seeding stops before it starts any container.
+`SANITIZE_FILE` defaults to `./scripts/sanitize.sql`, relative to the directory you run the seed script from, which is where Vortex projects keep their sanitization queries. If the file doesn't exist, seeding stops before it starts any container.
 
 The queries run with the `mysql` client against the database the dump was imported into, so table names don't need a database prefix. The client uses `utf8mb4`, so text with emoji works without a `SET NAMES` line. If any query fails, seeding stops before the image is built, so a half-sanitized image never reaches the registry.
 
-A file like Vortex's [`scripts/sanitize.sql`](https://github.com/drevops/vortex/blob/main/scripts/sanitize.sql) works as is. Keep in mind that Vortex runs that file after `drush sql:sanitize`, while `seed.sh` runs only your queries, so email addresses and passwords stay as they are unless the file changes them:
+A file like Vortex's [`scripts/sanitize.sql`](https://github.com/drevops/vortex/blob/main/scripts/sanitize.sql) works as is. Keep in mind that Vortex runs that file after `drush sql:sanitize`, while the seed script runs only your queries, so email addresses and passwords stay as they are unless the file changes them:
 
 ```sql
 -- Replace email addresses, so no message can reach a real user.
@@ -126,15 +164,17 @@ TRUNCATE TABLE `sessions`;
 
 ### Why sanitizing takes a second import
 
-MariaDB keeps recent changes in its redo log, and the redo log is part of the data that `seed.sh` captures. Sanitizing the captured database in place would leave the original values readable in the image. So `seed.sh` imports the dump and runs your queries in a separate container, exports the result, and imports that export into the container it captures, which never holds the original values.
+MariaDB and MySQL keep recent changes in a redo log, and the redo log is part of the data that the seed script captures. Sanitizing the captured database in place would leave the original values readable in the image. So the seed script imports the dump and runs your queries in a separate container, exports the result, and imports that export into the container it captures, which never holds the original values.
 
-The cost is time: the database is imported twice. The export, `.db-sanitized.sql` in the working directory, also takes up disk space while seeding runs. `seed.sh` removes it once it's imported or when seeding fails, and won't start if a file already exists at that path, so it never deletes a file it didn't create.
+The cost is time: the database is imported twice. The export, `.db-sanitized.sql` in the working directory, also takes up disk space while seeding runs. The seed script removes it once it's imported or when seeding fails, and won't start if a file already exists at that path, so it never deletes a file it didn't create.
 
 The export carries your databases, not the server's own `mysql` database, where accounts, grants and time zone data live. If the dump or your queries change them, for example with `CREATE USER` or `GRANT`, seeding with sanitization stops before it builds anything, because those changes wouldn't make it into the image. Dumps made with `drush sql:dump` don't touch the `mysql` database.
 
-`seed.sh` doesn't change the dump file itself. If the dump mustn't leave production in the first place, sanitize it as you export it, for example with [Drush GDPR Dumper](https://github.com/robiningelbrecht/drush-gdpr-dumper) or [MTK](https://github.com/skpr/mtk).
+The seed script doesn't change the dump file itself. If the dump mustn't leave production in the first place, sanitize it as you export it, for example with [Drush GDPR Dumper](https://github.com/robiningelbrecht/drush-gdpr-dumper) or [MTK](https://github.com/skpr/mtk).
 
 ## Forcing a database upgrade on start
+
+This section applies to the MariaDB image. The MySQL image has no such flag, because the MySQL server upgrades its data directory when it starts.
 
 Containers skip `mariadb-upgrade` by default, so a container started from a seeded image doesn't check every table before the server comes up. Set `MARIADB_FORCE_UPGRADE=1` when you do need the upgrade, for example when the database files came from an older MariaDB server than the one in the image:
 
@@ -159,8 +199,11 @@ npm --prefix tests/bats ci
 tests/bats/node_modules/.bin/bats tests/bats --tap
 
 # Individual test files.
-tests/bats/node_modules/.bin/bats tests/bats/image.bats --tap
-tests/bats/node_modules/.bin/bats tests/bats/seed.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/image.mariadb.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/image.mysql.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed.mariadb.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed.mysql.bats --tap
+tests/bats/node_modules/.bin/bats tests/bats/seed-surface.bats --tap
 tests/bats/node_modules/.bin/bats tests/bats/helper.bats --tap
 ```
 
@@ -174,19 +217,19 @@ This project uses _Year-Month-Patch_ versioning:
 
 Example: `23.4.2` indicates the third patch in April 2023.
 
-Versions are following versions of the [upstream image](https://hub.docker.com/r/uselagoon/mariadb-10.11-drupal/tags) to ease maintenance.
+Versions follow the versions of the upstream [MariaDB](https://hub.docker.com/r/uselagoon/mariadb-10.11-drupal/tags) and [MySQL](https://hub.docker.com/r/uselagoon/mysql-8.4/tags) images to ease maintenance.
 
 ### Releasing
 
 Releases are scheduled to occur at a minimum of once per month.
 
-This image is built by GitHub Actions and tagged as follows:
+GitHub Actions builds both images and tags them as follows:
 
 - `YY.m.patch` tag - when release tag is published on GitHub.
 - `latest` - when release tag is published on GitHub.
 - `canary` - on every push to `main` branch
 
-The `seed.sh` script is automatically uploaded as a release asset and can be downloaded from the latest release.
+GitHub Actions uploads the `seed.mariadb.sh` and `seed.mysql.sh` scripts as release assets, so you can download them from the latest release.
 
 ### Dependencies update
 

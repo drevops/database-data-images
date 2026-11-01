@@ -5,7 +5,7 @@
 /.logs/
 /coverage/
 
-# Database files created by seed.sh.
+# Database files created by the seed scripts.
 /.db-structure/
 /.db-sanitized.sql
 

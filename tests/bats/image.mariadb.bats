@@ -1,0 +1,160 @@
+#!/usr/bin/env bats
+#
+# tests/bats/node_modules/.bin/bats --tap tests/bats/image.mariadb.bats
+#
+# These tests run for the host platform by default. To run them for another
+# platform, set DOCKER_DEFAULT_PLATFORM to that platform; the Docker buildx
+# driver must support it.
+#
+# DOCKER_DEFAULT_PLATFORM=linux/arm64 tests/bats/node_modules/.bin/bats --tap tests/bats/image.mariadb.bats
+#
+# The tests copy the source code at the last commit into the test directory,
+# so uncommitted changes are not tested.
+#
+# shellcheck disable=SC2030,SC2031
+
+load _helper
+
+@test "Data is preserved in an image captured from the running container" {
+  tag="${TEST_DOCKER_TAG}"
+  # The base image is local; the buildx build below loads it into the Docker
+  # engine from the buildx cache.
+  base_image="testorg/testimagebase:${tag}"
+
+  step "Prepare base image."
+
+  substep "Build base image ${base_image} and load into 'docker images'."
+  docker buildx build --platform "${BUILDX_PLATFORMS}" --load -t "${base_image}" -f mariadb/10.11.Dockerfile mariadb
+
+  substep "Start new detached container from the built base image."
+  cid="$(docker run --user 1000 -d "${base_image}" 2>&3)"
+  substep "Started container ${cid}."
+
+  substep "Assert that the database directory is present in the base image."
+  docker exec --user 1000 "${cid}" test -d /home/db-data
+
+  # The entrypoint script creates the initial database structure and the
+  # 'drupal' database directory, but not the database tables.
+  substep "Assert that the database directory is present, but the database directory is empty in the base image."
+  docker exec --user 1000 "${cid}" bash -c '[ -d /home/db-data ] && [ -z "$(ls -A /home/db-data/drupal/users*)" ]'
+
+  wait_mysql "${cid}"
+
+  substep "Assert that the database is present in the container."
+  run docker exec --user 1000 "${cid}" /usr/bin/mysql -e "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'drupal';"
+  assert_success
+  assert_output_contains "drupal"
+
+  substep "Assert that the created table is not present in the container."
+  run docker exec --user 1000 "${cid}" /usr/bin/mysql -e "USE drupal; SHOW TABLES LIKE 'mytesttable';"
+  assert_success
+  assert_output_not_contains "mytesttable"
+
+  step "Assert capturing of the data into the image."
+
+  substep "Create a table in the database."
+  docker exec --user 1000 "${cid}" /usr/bin/mysql -e "USE drupal; CREATE TABLE mytesttable(c CHAR(20) CHARACTER SET utf8 COLLATE utf8_bin);"
+
+  substep "Assert that the table is present after creation."
+  run docker exec --user 1000 "${cid}" /usr/bin/mysql -e "USE drupal; SHOW TABLES LIKE 'mytesttable';"
+  assert_success
+  assert_output_contains "mytesttable"
+
+  substep "Commit an image from the last container and get the image ID."
+  run docker commit "${cid}"
+  assert_success
+  committed_image_id="${output}"
+  substep "Created new committed image ${committed_image_id}."
+
+  substep "Create a new tag for committed image."
+  new_image="${base_image}-latest"
+  docker tag "${committed_image_id}" "${new_image}"
+  substep "Tagged committed image ${committed_image_id} as ${new_image}."
+
+  substep "Start a new container from the tagged committed image ${new_image}."
+  new_cid="$(docker run --user 1000 -d "${new_image}" 2>&3)"
+  substep "Started new container ${new_cid}."
+
+  wait_mysql "${new_cid}"
+
+  substep "Assert that the database is present after restart."
+  run docker exec --user 1000 "${new_cid}" /usr/bin/mysql -e "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'drupal';"
+  assert_success
+  assert_output_contains "drupal"
+
+  substep "Assert that the table is present after restart."
+  run docker exec --user 1000 "${new_cid}" /usr/bin/mysql -e "USE drupal; SHOW TABLES LIKE 'mytesttable';"
+  assert_success
+  assert_output_contains "mytesttable"
+}
+
+@test "Database upgrade is forced by MARIADB_FORCE_UPGRADE or its deprecated alias" {
+  tag="${TEST_DOCKER_TAG}"
+  base_image="testorg/testimagebase:${tag}"
+  data_image="${base_image}-data"
+
+  step "Prepare an image with an initialized database."
+
+  substep "Build base image ${base_image} and load into 'docker images'."
+  docker buildx build --platform "${BUILDX_PLATFORMS}" --load -t "${base_image}" -f mariadb/10.11.Dockerfile mariadb
+
+  substep "Start a container from the base image to initialize the database."
+  cid="$(docker run --user 1000 -d "${base_image}" 2>&3)"
+  wait_mysql "${cid}"
+
+  substep "Stop the container and commit it as ${data_image}."
+  docker stop "${cid}"
+  docker commit "${cid}" "${data_image}"
+
+  step "Assert that the upgrade follows MARIADB_FORCE_UPGRADE and its deprecated alias."
+
+  # Columns: MARIADB_FORCE_UPGRADE, FORCE_MYSQL_UPGRADE and the expected
+  # outcome. 'unset' leaves that variable unset.
+  # shellcheck disable=SC2034
+  TEST_CASES=(
+    "unset" "unset" "upgrade=0 notice=0"
+    "1" "unset" "upgrade=1 notice=0"
+    "true" "unset" "upgrade=0 notice=0"
+    "unset" "1" "upgrade=1 notice=1"
+    "1" "0" "upgrade=1 notice=1"
+    "0" "1" "upgrade=0 notice=1"
+    "" "1" "upgrade=1 notice=1"
+    "1" "" "upgrade=1 notice=0"
+  )
+  dataprovider_run "start_with_upgrade_flags" 3
+}
+
+# Starts a container from the image in 'data_image' with the given
+# MARIADB_FORCE_UPGRADE and FORCE_MYSQL_UPGRADE values, then prints whether
+# the upgrade ran and whether the deprecation notice was printed.
+start_with_upgrade_flags() {
+  local run_args=(--user 1000 -d)
+
+  if [ "${1}" != "unset" ]; then
+    run_args+=(-e "MARIADB_FORCE_UPGRADE=${1}")
+  fi
+
+  if [ "${2}" != "unset" ]; then
+    run_args+=(-e "FORCE_MYSQL_UPGRADE=${2}")
+  fi
+
+  local cid
+  cid="$(docker run "${run_args[@]}" "${data_image}" 2>&3)"
+  wait_mysql "${cid}"
+
+  local logs
+  logs="$(docker logs "${cid}" 2>&1)"
+  docker rm -f -v "${cid}" >/dev/null
+
+  local upgrade=0
+  if [[ ${logs} == *"starting mysql upgrade"* ]]; then
+    upgrade=1
+  fi
+
+  local notice=0
+  if [[ ${logs} == *"FORCE_MYSQL_UPGRADE is deprecated; use MARIADB_FORCE_UPGRADE instead."* ]]; then
+    notice=1
+  fi
+
+  echo "upgrade=${upgrade} notice=${notice}"
+}

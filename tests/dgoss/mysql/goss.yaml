@@ -1,0 +1,55 @@
+file:
+  /usr/bin/mysql:
+    exists: true
+    contains: []
+
+  /usr/sbin/mysqld:
+    exists: true
+    contains: []
+
+  /home/db-data:
+    exists: true
+    contains: []
+
+  /etc/mysql/conf.d/disable-binlog.cnf:
+    exists: true
+    contains:
+      - skip-log-bin
+
+  /lagoon/entrypoints/00-umask.sh:
+    exists: true
+
+  /lagoon/entrypoints/10-passwd.sh:
+    exists: true
+
+  /lagoon/entrypoints/100-myql-logging.bash:
+    exists: true
+
+  /lagoon/entrypoints/150-mysql-performance.bash:
+    exists: true
+
+  /lagoon/entrypoints/200-mysql-envplate.bash:
+    exists: true
+
+  /lagoon/entrypoints/50-dotenv.sh:
+    exists: true
+
+  /lagoon/entrypoints/55-generate-env.sh:
+    exists: true
+
+  /lagoon/entrypoints/90-cronjobs.sh:
+    exists: true
+
+  /lagoon/entrypoints/999-readiness.sh:
+    exists: true
+
+  /lagoon/entrypoints/9999-mysql-init.bash:
+    exists: true
+
+user:
+  mysql:
+    exists: true
+
+process:
+  mysqld:
+    running: true
