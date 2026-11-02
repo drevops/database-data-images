@@ -1,6 +1,6 @@
 <p align="center">
   <a href="" rel="noopener">
-  <img width=200px height=200px src="https://placehold.jp/000000/ffffff/200x200.png?text=Database+Data+Images&css=%7B%22border-radius%22%3A%22%20100px%22%7D" alt="Database data images logo"></a>
+  <img width=200px height=200px src="logo.png" alt="Database Data Images logo"></a>
 </p>
 
 <h1 align="center">Database images for Drupal with the database captured as Docker layers.</h1>
@@ -22,6 +22,8 @@
 
 [![Vortex Ecosystem](https://img.shields.io/badge/%F0%9F%8C%80-Vortex%20Ecosystem-2C5A68?style=for-the-badge&labelColor=65ACBC)](https://github.com/drevops/vortex)
 </div>
+
+Importing a large Drupal database can take many minutes. Every developer machine and every CI build repeats that import. These images store the database inside the image, so a new container starts with all the data in place.
 
 ## How it works
 
