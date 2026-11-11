@@ -4,7 +4,7 @@
 # The upstream image declares the data directory as a VOLUME, which Docker
 # does not export, so a different data directory is used.
 #
-FROM uselagoon/mysql-8.4:26.11.0@sha256:4428eca08694c0b08566c4145ff0baf0c546b8294d7b1b990254a428c9fb0d03
+FROM uselagoon/mysql-8.4:26.11.1@sha256:03c40797d5a67f87ce56dba6e85d7f062d359b6d0a5e6da1147cdf3deb443a35
 
 ENV MYSQL_DATA_DIR=/home/db-data \
     MYSQL_DATABASE=drupal \
