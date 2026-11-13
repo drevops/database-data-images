@@ -8,7 +8,7 @@
 # marks each local change with '@note:'. The default CMD is also overridden
 # to include the custom data directory.
 #
-FROM uselagoon/mariadb-10.11-drupal:26.11.1@sha256:a3cdffbbc855f2e6e42ea8884cc7050925d799528c5d876bf582af0af61d7765
+FROM uselagoon/mariadb-10.11-drupal:26.11.2@sha256:404147392f341f09b259c3aff5898696c8b714b0a20045dd81241d388fb3989c
 
 ENV MARIADB_DATA_DIR=/home/db-data
 
