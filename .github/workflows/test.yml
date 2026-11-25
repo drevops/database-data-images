@@ -54,14 +54,14 @@ jobs:
             arch: amd64
             os: ubuntu-latest
             # https://hub.docker.com/r/drevops/ci-runner
-            container: drevops/ci-runner:26.11.1@sha256:ce1ea46e83eee610026bb806e1b3baac6a4a498d90451ca531da209d6e912884
+            container: drevops/ci-runner:26.11.2@sha256:083204bbd686508b6f2489bd33f43a144784dfcedc3b0520eeb31f7eb76c9376
           - name: Test MySQL, Arch amd64, custom runner
             engine: mysql
             dockerfile: mysql/8.4.Dockerfile
             arch: amd64
             os: ubuntu-latest
             # https://hub.docker.com/r/drevops/ci-runner
-            container: drevops/ci-runner:26.11.1@sha256:ce1ea46e83eee610026bb806e1b3baac6a4a498d90451ca531da209d6e912884
+            container: drevops/ci-runner:26.11.2@sha256:083204bbd686508b6f2489bd33f43a144784dfcedc3b0520eeb31f7eb76c9376
 
     runs-on: ${{ matrix.os }}
 
